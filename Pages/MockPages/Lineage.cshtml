@@ -1,0 +1,648 @@
+@page
+@model MyDashboardApp.Pages.MockPages.LineageModel
+@{
+    ViewData["Title"] = "Data Lineage";
+    Layout = "Shared/_Layout";
+}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="text-2xl font-bold text-white mb-4">Data Lineage Tree</h1>
+            
+            <!-- Object Selection -->
+            <div class="card bg-dark border-secondary mb-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-4">
+                            <label for="objectSelect" class="form-label text-white">Select Object:</label>
+                            <select id="objectSelect" class="form-select bg-dark text-white border-secondary" onchange="loadLineageData()">
+                                @foreach (var obj in Model.AllObjects)
+                                {
+                                    <option value="@obj" selected="@(obj == Model.SelectedObject)">@obj</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <form method="post" asp-page-handler="LoadData" class="d-inline">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-database"></i> Load Data from New.sqlite
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-3 justify-content-end">
+                                <div class="text-center">
+                                    <div class="text-info fs-4 fw-bold" id="upstreamCount">@(Model.LineageData?.TotalUpstreamCount ?? 0)</div>
+                                    <small class="text-muted">Upstream</small>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-warning fs-4 fw-bold" id="downstreamCount">@(Model.LineageData?.TotalDownstreamCount ?? 0)</div>
+                                    <small class="text-muted">Downstream</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Tree View -->
+        <div class="col-lg-8">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0 text-white">Lineage Tree</h5>
+                    <div class="btn-group btn-group-sm mt-2" role="group">
+                        <button type="button" class="btn btn-outline-light" onclick="expandAll()">Expand All</button>
+                        <button type="button" class="btn btn-outline-light" onclick="collapseAll()">Collapse All</button>
+                        <button type="button" class="btn btn-outline-light" onclick="toggleImpactMode()" id="impactBtn">Impact Mode</button>
+                    </div>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    <!-- Breadcrumb Navigation -->
+                    <div id="breadcrumbNav" class="breadcrumb-nav mb-3" style="display: none;">
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0" id="breadcrumbList">
+                            </ol>
+                        </nav>
+                    </div>
+                    
+                    <div id="lineageTree" class="lineage-tree">
+                        <!-- Tree will be rendered here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Context Panel -->
+        <div class="col-lg-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0 text-white">Object Details</h5>
+                </div>
+                <div class="card-body">
+                    <div id="contextPanel">
+                        <p class="text-muted">Select an object from the tree to view details</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search & Filter -->
+            <div class="card bg-dark border-secondary mt-3">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0 text-white">Search & Filter</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <input type="text" id="searchInput" class="form-control bg-dark text-white border-secondary" 
+                               placeholder="Search objects..." onkeyup="filterTree()">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-white">Object Type:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterTable" checked onchange="filterTree()">
+                            <label class="form-check-label text-white" for="filterTable">Tables</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterView" checked onchange="filterTree()">
+                            <label class="form-check-label text-white" for="filterView">Views</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterProc" checked onchange="filterTree()">
+                            <label class="form-check-label text-white" for="filterProc">Procedures</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-white">Link Type:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterFK" checked onchange="filterTree()">
+                            <label class="form-check-label text-white" for="filterFK">Foreign Keys</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filterSQL" checked onchange="filterTree()">
+                            <label class="form-check-label text-white" for="filterSQL">SQL Dependencies</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0 text-white">Raw Foreign Key Dependencies (for Debugging)</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="text-white">@System.Text.Json.JsonSerializer.Serialize(Model.RawFkDependencies, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary">
+                    <h5 class="mb-0 text-white">Raw SQL Dependencies (for Debugging)</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="text-white">@System.Text.Json.JsonSerializer.Serialize(Model.RawSqlDependencies, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.lineage-tree {
+    font-family: 'Courier New', monospace;
+}
+
+.tree-node {
+    margin: 5px 0;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.tree-node:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.tree-node.selected {
+    background-color: rgba(0, 123, 255, 0.3);
+    border: 1px solid #007bff;
+}
+
+.tree-node.root {
+    background-color: rgba(255, 193, 7, 0.2);
+    border: 2px solid #ffc107;
+    font-weight: bold;
+}
+
+.tree-node.upstream {
+    border-left: 3px solid #17a2b8;
+}
+
+.tree-node.upstream.depth-1 {
+    background-color: rgba(23, 162, 184, 0.1);
+}
+
+.tree-node.upstream.depth-2 {
+    background-color: rgba(23, 162, 184, 0.2);
+}
+
+.tree-node.upstream.depth-3 {
+    background-color: rgba(23, 162, 184, 0.3);
+}
+
+.tree-node.downstream {
+    border-left: 3px solid #28a745;
+}
+
+.tree-node.downstream.depth-1 {
+    background-color: rgba(40, 167, 69, 0.1);
+}
+
+.tree-node.downstream.depth-2 {
+    background-color: rgba(40, 167, 69, 0.2);
+}
+
+.tree-node.downstream.depth-3 {
+    background-color: rgba(40, 167, 69, 0.3);
+}
+
+.node-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    border-radius: 3px;
+    text-align: center;
+    line-height: 20px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.icon-table { background-color: #007bff; color: white; }
+.icon-view { background-color: #28a745; color: white; }
+.icon-proc { background-color: #fd7e14; color: white; }
+
+.expand-toggle {
+    cursor: pointer;
+    margin-right: 5px;
+    user-select: none;
+    color: #6c757d;
+}
+
+.expand-toggle:hover {
+    color: #fff;
+}
+
+.tree-children {
+    margin-left: 20px;
+    border-left: 1px dashed #6c757d;
+    padding-left: 15px;
+}
+
+.breadcrumb-nav {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+.breadcrumb {
+    background: none;
+    margin-bottom: 0;
+}
+
+.breadcrumb-item a {
+    color: #17a2b8;
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    color: #fff;
+}
+
+.breadcrumb-item.active {
+    color: #ffc107;
+}
+
+.impact-mode .tree-node.impacted {
+    background-color: rgba(220, 53, 69, 0.2);
+    border-color: #dc3545;
+    animation: pulse 2s infinite;
+}
+
+@@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.hidden {
+    display: none !important;
+}
+
+.tree-section {
+    margin-bottom: 20px;
+}
+
+.tree-section-header {
+    padding: 8px 0;
+    border-bottom: 1px solid #6c757d;
+    margin-bottom: 10px;
+}
+
+.node-metadata {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin-left: 28px;
+}
+
+.hop-indicator {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: #6c757d;
+    color: white;
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 0.7em;
+}
+</style>
+
+<script>
+let currentLineageData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.LineageData ?? new MyDashboardApp.Models.LineageTreeData()));
+let impactModeEnabled = false;
+let expandedNodes = new Set();
+
+async function loadLineageData() {
+    const selectedObject = document.getElementById('objectSelect').value;
+    if (!selectedObject) return;
+
+    try {
+        const response = await fetch(`?handler=LineageData&objectName=${encodeURIComponent(selectedObject)}`);
+        currentLineageData = await response.json();
+        renderLineageTree();
+        updateStats();
+        updateBreadcrumb([selectedObject]);
+    } catch (error) {
+        console.error('Error loading lineage data:', error);
+        document.getElementById('lineageTree').innerHTML = '<p class="text-danger">Error loading lineage data</p>';
+    }
+}
+
+function renderLineageTree() {
+    const treeContainer = document.getElementById('lineageTree');
+    treeContainer.innerHTML = '';
+
+    if (!currentLineageData || !currentLineageData.root) {
+        treeContainer.innerHTML = '<p class="text-muted">No lineage data available</p>';
+        return;
+    }
+
+    // Render upstream section
+    if (currentLineageData.upstreamNodes && currentLineageData.upstreamNodes.length > 0) {
+        const upstreamSection = document.createElement('div');
+        upstreamSection.className = 'tree-section';
+        upstreamSection.innerHTML = '<div class="tree-section-header"><h6 class="text-info mb-0">⬆️ Upstream Dependencies</h6></div>';
+        
+        const upstreamTree = document.createElement('div');
+        upstreamTree.className = 'tree-children';
+        renderNodes(currentLineageData.upstreamNodes, upstreamTree, 'upstream');
+        upstreamSection.appendChild(upstreamTree);
+        treeContainer.appendChild(upstreamSection);
+    }
+
+    // Render root node
+    const rootSection = document.createElement('div');
+    rootSection.className = 'tree-section';
+    rootSection.innerHTML = '<div class="tree-section-header"><h6 class="text-warning mb-0">🎯 Selected Object</h6></div>';
+    const rootNode = createNodeElement(currentLineageData.root, 'root');
+    rootSection.appendChild(rootNode);
+    treeContainer.appendChild(rootSection);
+
+    // Render downstream section
+    if (currentLineageData.downstreamNodes && currentLineageData.downstreamNodes.length > 0) {
+        const downstreamSection = document.createElement('div');
+        downstreamSection.className = 'tree-section';
+        downstreamSection.innerHTML = '<div class="tree-section-header"><h6 class="text-success mb-0">⬇️ Downstream Dependencies</h6></div>';
+        
+        const downstreamTree = document.createElement('div');
+        downstreamTree.className = 'tree-children';
+        renderNodes(currentLineageData.downstreamNodes, downstreamTree, 'downstream');
+        downstreamSection.appendChild(downstreamTree);
+        treeContainer.appendChild(downstreamSection);
+    }
+}
+
+function renderNodes(nodes, container, direction) {
+    nodes.forEach(node => {
+        const nodeElement = createNodeElement(node, direction);
+        container.appendChild(nodeElement);
+
+        if (node.children && node.children.length > 0) {
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'tree-children';
+            childrenContainer.style.display = expandedNodes.has(node.objectName) ? 'block' : 'none';
+            renderNodes(node.children, childrenContainer, direction);
+            nodeElement.appendChild(childrenContainer);
+        }
+    });
+}
+
+function createNodeElement(node, direction) {
+    const nodeDiv = document.createElement('div');
+nodeDiv.className = `tree-node ${direction} depth-${node.depth}`;
+    nodeDiv.dataset.objectName = node.objectName;
+    nodeDiv.dataset.objectType = node.objectType;
+    nodeDiv.dataset.linkType = node.linkType || '';
+
+    const icon = getObjectIcon(node.objectType);
+    const linkBadge = node.linkType ? `<span class="badge bg-secondary ms-2">${node.linkType}</span>` : '';
+    const hopIndicator = node.depth > 0 ? `<span class="hop-indicator">${node.depth}</span>` : '';
+    const toggle = node.children && node.children.length > 0 ? 
+                   `<span class="expand-toggle" onclick="toggleExpand(event, '${node.objectName}')">${expandedNodes.has(node.objectName) ? '▼' : '▶'}</span>` : '';
+
+    nodeDiv.innerHTML = `
+        ${toggle}
+        ${icon}
+        <span class="node-name">${node.objectName}</span>
+        ${linkBadge}
+        ${hopIndicator}
+    `;
+
+    // Add metadata if available
+    if (node.metadata && Object.keys(node.metadata).length > 0) {
+        const metadataDiv = document.createElement('div');
+        metadataDiv.className = 'node-metadata';
+        const metadataItems = Object.entries(node.metadata).slice(0, 2).map(([key, value]) => `${key}: ${value}`);
+        metadataDiv.textContent = metadataItems.join(' | ');
+        nodeDiv.appendChild(metadataDiv);
+    }
+
+    nodeDiv.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showObjectDetails(node);
+    });
+    
+    return nodeDiv;
+}
+
+function toggleExpand(event, objectName) {
+    event.stopPropagation();
+    const nodeElement = event.target.closest('.tree-node');
+    const childrenContainer = nodeElement.querySelector('.tree-children');
+    const toggleIcon = event.target;
+
+    if (childrenContainer) {
+        if (childrenContainer.style.display === 'none') {
+            childrenContainer.style.display = 'block';
+            toggleIcon.textContent = '▼';
+            expandedNodes.add(objectName);
+        } else {
+            childrenContainer.style.display = 'none';
+            toggleIcon.textContent = '▶';
+            expandedNodes.delete(objectName);
+        }
+    }
+}
+
+function getObjectIcon(objectType) {
+    const iconClass = objectType === 'VIEW' ? 'icon-view' : 
+                     objectType === 'PROC' ? 'icon-proc' : 'icon-table';
+    const iconText = objectType === 'VIEW' ? 'V' : 
+                    objectType === 'PROC' ? 'P' : 'T';
+    return `<span class="node-icon ${iconClass}">${iconText}</span>`;
+}
+
+function showObjectDetails(node) {
+    // Remove previous selection
+    document.querySelectorAll('.tree-node.selected').forEach(el => {
+        el.classList.remove('selected');
+    });
+
+    // Add selection to clicked node
+    const nodeElement = document.querySelector(`[data-object-name="${node.objectName}"]`);
+    if (nodeElement) {
+        nodeElement.classList.add('selected');
+    }
+
+    const contextPanel = document.getElementById('contextPanel');
+    const metadata = node.metadata || {};
+    
+    let metadataHtml = '';
+    Object.keys(metadata).forEach(key => {
+        metadataHtml += `<p><strong>${key}:</strong> ${metadata[key]}</p>`;
+    });
+
+    let sampleDataHtml = '';
+    if (metadata.sampleData) {
+        sampleDataHtml = `
+            <hr>
+            <h6 class="text-white">Sample Data</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-dark">
+                    <tbody>
+                        ${metadata.sampleData.split('\n').slice(0, 5).map(row => 
+                            `<tr>${row.split(',').map(cell => `<td>${cell}</td>`).join('')}</tr>`
+                        ).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    contextPanel.innerHTML = `
+        <h6 class="text-white">${node.objectName}</h6>
+        <p><strong>Type:</strong> <span class="badge bg-primary">${node.objectType}</span></p>
+        ${node.linkType ? `<p><strong>Link Type:</strong> <span class="badge bg-secondary">${node.linkType}</span></p>` : ''}
+        <p><strong>Depth:</strong> ${node.depth} hops</p>
+        <p><strong>Path:</strong> <small class="text-muted">${node.path}</small></p>
+        ${metadataHtml}
+        ${sampleDataHtml}
+        <hr>
+        <div class="d-grid gap-2">
+            <button class="btn btn-sm btn-outline-primary" onclick="selectObject('${node.objectName}')">
+                Set as Root
+            </button>
+            <button class="btn btn-sm btn-outline-info" onclick="showImpactAnalysis('${node.objectName}')">
+                Impact Analysis
+            </button>
+        </div>
+    `;
+}
+
+function selectObject(objectName) {
+    document.getElementById('objectSelect').value = objectName;
+    loadLineageData();
+}
+
+function showImpactAnalysis(objectName) {
+    // Highlight all downstream nodes as impacted
+    document.querySelectorAll('.tree-node.downstream').forEach(el => {
+        el.classList.add('impacted');
+    });
+    
+    // Show impact summary
+    const downstreamCount = currentLineageData.downstreamNodes ? currentLineageData.downstreamNodes.length : 0;
+    alert(`Impact Analysis for ${objectName}:\n\n${downstreamCount} objects would be affected by changes to this object.`);
+}
+
+function updateStats() {
+    document.getElementById('upstreamCount').textContent = currentLineageData.totalUpstreamCount || 0;
+    document.getElementById('downstreamCount').textContent = currentLineageData.totalDownstreamCount || 0;
+}
+
+function updateBreadcrumb(path) {
+    const breadcrumbNav = document.getElementById('breadcrumbNav');
+    const breadcrumbList = document.getElementById('breadcrumbList');
+    
+    if (path.length > 1) {
+        breadcrumbNav.style.display = 'block';
+        breadcrumbList.innerHTML = path.map((item, index) => {
+            const isLast = index === path.length - 1;
+            return `<li class="breadcrumb-item ${isLast ? 'active' : ''}">
+                ${isLast ? item : `<a href="#" onclick="selectObject('${item}')">${item}</a>`}
+            </li>`;
+        }).join('');
+    } else {
+        breadcrumbNav.style.display = 'none';
+    }
+}
+
+function expandAll() {
+    document.querySelectorAll('.tree-children').forEach(el => {
+        el.style.display = 'block';
+    });
+    document.querySelectorAll('.expand-toggle').forEach(el => {
+        el.textContent = '▼';
+    });
+}
+
+function collapseAll() {
+    document.querySelectorAll('.tree-children').forEach(el => {
+        el.style.display = 'none';
+    });
+    document.querySelectorAll('.expand-toggle').forEach(el => {
+        el.textContent = '▶';
+    });
+}
+
+function toggleImpactMode() {
+    impactModeEnabled = !impactModeEnabled;
+    const treeContainer = document.getElementById('lineageTree');
+    const impactBtn = document.getElementById('impactBtn');
+    
+    if (impactModeEnabled) {
+        treeContainer.classList.add('impact-mode');
+        impactBtn.classList.add('btn-warning');
+        impactBtn.classList.remove('btn-outline-light');
+        impactBtn.textContent = 'Exit Impact Mode';
+        
+        // In impact mode, highlight downstream nodes as "impacted"
+        document.querySelectorAll('.tree-node.downstream').forEach(el => {
+            el.classList.add('impacted');
+        });
+    } else {
+        treeContainer.classList.remove('impact-mode');
+        impactBtn.classList.remove('btn-warning');
+        impactBtn.classList.add('btn-outline-light');
+        impactBtn.textContent = 'Impact Mode';
+        
+        document.querySelectorAll('.tree-node.impacted').forEach(el => {
+            el.classList.remove('impacted');
+        });
+    }
+}
+
+function filterTree() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const showTables = document.getElementById('filterTable').checked;
+    const showViews = document.getElementById('filterView').checked;
+    const showProcs = document.getElementById('filterProc').checked;
+    const showFK = document.getElementById('filterFK').checked;
+    const showSQL = document.getElementById('filterSQL').checked;
+
+    document.querySelectorAll('.tree-node').forEach(node => {
+        const objectName = node.dataset.objectName.toLowerCase();
+        const objectType = node.dataset.objectType;
+        const linkType = node.dataset.linkType;
+
+        let visible = true;
+
+        // Text search
+        if (searchTerm && !objectName.includes(searchTerm)) {
+            visible = false;
+        }
+
+        // Object type filter
+        if (objectType === 'TABLE' && !showTables) visible = false;
+        if (objectType === 'VIEW' && !showViews) visible = false;
+        if (objectType === 'PROC' && !showProcs) visible = false;
+
+        // Link type filter
+        if (linkType === 'FK' && !showFK) visible = false;
+        if (linkType === 'SQL' && !showSQL) visible = false;
+
+        node.classList.toggle('hidden', !visible);
+    });
+}
+
+// Initialize the tree on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const objectSelect = document.getElementById('objectSelect');
+    if (objectSelect.value) {
+        loadLineageData();
+    }
+});
+</script>

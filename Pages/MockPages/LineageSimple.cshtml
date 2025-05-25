@@ -1,0 +1,71 @@
+@page
+@model MyDashboardApp.Pages.MockPages.LineageModel
+@{
+    ViewData["Title"] = "Data Lineage";
+    Layout = "Shared/_Layout";
+}
+
+<div class="container-fluid">
+    <h1 class="text-2xl font-bold text-white mb-4">Data Lineage Tree</h1>
+    
+    <div class="card bg-dark border-secondary mb-4">
+        <div class="card-body">
+            <h5 class="text-white">Available Objects</h5>
+            <ul class="text-white">
+                @foreach (var obj in Model.AllObjects)
+                {
+                    <li>@obj</li>
+                }
+            </ul>
+        </div>
+    </div>
+
+    @if (Model.LineageData != null)
+    {
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-body">
+                <h5 class="text-white">Selected Object: @Model.LineageData.SelectedObject</h5>
+                <p class="text-info">Upstream Count: @Model.LineageData.TotalUpstreamCount</p>
+                <p class="text-warning">Downstream Count: @Model.LineageData.TotalDownstreamCount</p>
+            </div>
+        </div>
+
+        @if (Model.LineageData.UpstreamNodes.Any())
+        {
+            <div class="card bg-dark border-secondary mb-4">
+                <div class="card-body">
+                    <h5 class="text-info">Upstream Dependencies</h5>
+                    <ul class="text-white">
+                        @foreach (var node in Model.LineageData.UpstreamNodes)
+                        {
+                            <li>@node.ObjectName (@node.ObjectType) - Depth: @node.Depth</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        @if (Model.LineageData.DownstreamNodes.Any())
+        {
+            <div class="card bg-dark border-secondary mb-4">
+                <div class="card-body">
+                    <h5 class="text-success">Downstream Dependencies</h5>
+                    <ul class="text-white">
+                        @foreach (var node in Model.LineageData.DownstreamNodes)
+                        {
+                            <li>@node.ObjectName (@node.ObjectType) - Depth: @node.Depth</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="card bg-dark border-secondary">
+            <div class="card-body">
+                <p class="text-muted">No lineage data available</p>
+            </div>
+        </div>
+    }
+</div>

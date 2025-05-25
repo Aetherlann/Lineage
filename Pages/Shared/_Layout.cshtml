@@ -1,0 +1,90 @@
+@{
+    Layout = null;
+    var currentPage = ViewContext.RouteData.Values["page"]?.ToString(); // Declare currentPage once here
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>@ViewData["Title"] – Stitch Design</title>
+
+  <!-- Tailwind (you can replace with your built CSS) -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <!-- Your custom CSS -->
+  <link rel="stylesheet" href="~/css/site.css" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?display=swap&family=Inter:wght@400;500;700;900&family=Noto+Sans:wght@400;500;700;900"
+    rel="stylesheet"
+  />
+  <!-- Feather Icons -->
+  <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+</head>
+<body class="relative flex min-h-screen flex-col overflow-x-hidden bg-dashboard font-sans">
+  <header class="flex items-center justify-between border-b border-dashboard px-10 py-3">
+    <div class="flex items-center gap-4 text-white mr-8">
+      <!-- SVG icon -->
+      <h2 class="text-lg font-bold leading-tight tracking-tight">Data Insights</h2>
+    </div>
+    <nav class="flex items-center gap-8">
+      <a class="text-white text-sm font-medium flex items-center gap-1 transition-colors duration-200 ease-in-out hover:text-gray-400 @(currentPage == "/MockPages/Overview" ? "text-blue-400" : "")" href="/MockPages/Overview"><i data-feather="home" class="text-gray-200"></i>Overview</a>
+      <a class="text-white text-sm font-medium flex items-center gap-1 transition-colors duration-200 ease-in-out hover:text-gray-400 @(currentPage == "/MockPages/Lineage" ? "text-blue-400" : "")" href="/MockPages/Lineage"><i data-feather="git-branch" class="text-gray-200"></i>Lineage</a>
+      <a class="text-white text-sm font-medium flex items-center gap-1 transition-colors duration-200 ease-in-out hover:text-gray-400 @(currentPage == "/MockPages/ImpactAnalysis" ? "text-blue-400" : "")" href="/MockPages/ImpactAnalysis"><i data-feather="activity" class="text-gray-200"></i>Impact Analysis</a>
+      <a class="text-white text-sm font-medium flex items-center gap-1 transition-colors duration-200 ease-in-out hover:text-gray-400 @(currentPage == "/MockPages/DataCatalog" ? "text-blue-400" : "")" href="/MockPages/DataCatalog"><i data-feather="book" class="text-gray-200"></i>Data Catalog</a>
+      <a class="text-white text-sm font-medium flex items-center gap-1 transition-colors duration-200 ease-in-out hover:text-gray-400 @(currentPage == "/MockPages/DataQuality" ? "text-blue-400" : "")" href="/MockPages/DataQuality"><i data-feather="check-circle" class="text-gray-200"></i>Data Quality</a>
+      <a class="text-white text-sm font-medium flex items-center gap-1 transition-colors duration-200 ease-in-out hover:text-gray-400 @(currentPage == "/MockPages/Documentation" ? "text-blue-400" : "")" href="/MockPages/Documentation"><i data-feather="file-text" class="text-gray-200"></i>Documentation</a>
+    </nav>
+    <div class="flex items-center gap-4 ml-auto"> @* Moved ml-auto here to push only this div to the right *@
+      <button class="h-10 rounded-lg bg-panel px-4 text-white font-bold transition-colors duration-200 ease-in-out hover:bg-gray-700">
+        <i data-feather="bell" class="text-gray-200"></i>
+      </button>
+      <div
+        class="rounded-full bg-center bg-cover w-10 h-10"
+        style="background-image:url('https://lh3.googleusercontent.com/...');"
+      ></div>
+    </div>
+  </header>
+  <div class="flex flex-1">
+    <aside class="w-80 bg-dashboard p-4">
+      <!-- Sidebar items -->
+      <ul class="space-y-2">
+        <li>
+          <a href="/MockPages/ElementMapping" class="flex items-center gap-3 p-2 rounded transition-colors duration-200 ease-in-out hover:bg-gray-700 hover:text-gray-400 @(currentPage == "/MockPages/ElementMapping" ? "bg-blue-700 text-white" : "")">
+            <i data-feather="map" class="text-gray-200"></i><span class="text-white">Element Mapping</span>
+          </a>
+        </li>
+        <li>
+          <a href="/MockPages/Charts" class="flex items-center gap-3 p-2 rounded transition-colors duration-200 ease-in-out hover:bg-gray-700 hover:text-gray-400 @(currentPage == "/MockPages/Charts" ? "bg-blue-700 text-white" : "")">
+            <i data-feather="bar-chart-2" class="text-gray-200"></i><span class="text-white">Charts</span>
+          </a>
+        </li>
+        <li>
+          <a href="/MockPages/SQL" class="flex items-center gap-3 p-2 rounded transition-colors duration-200 ease-in-out hover:bg-gray-700 hover:text-gray-400 @(currentPage == "/MockPages/SQL" ? "bg-blue-700 text-white" : "")">
+            <i data-feather="database" class="text-gray-200"></i><span class="text-white">SQL</span>
+          </a>
+        </li>
+        <li>
+          <a href="/MockPages/SSIS" class="flex items-center gap-3 p-2 rounded transition-colors duration-200 ease-in-out hover:bg-gray-700 hover:text-gray-400 @(currentPage == "/MockPages/SSIS" ? "bg-blue-700 text-white" : "")">
+            <i data-feather="server" class="text-gray-200"></i><span class="text-white">SSIS</span>
+          </a>
+        </li>
+        <li>
+          <a href="/MockPages/DotNet" class="flex items-center gap-3 p-2 rounded transition-colors duration-200 ease-in-out hover:bg-gray-700 hover:text-gray-400 @(currentPage == "/MockPages/DotNet" ? "bg-blue-700 text-white" : "")">
+            <i data-feather="code" class="text-gray-200"></i><span class="text-white">.NET</span>
+          </a>
+        </li>
+      </ul>
+    </aside>
+    <main class="flex-1 p-6">
+      @RenderBody()
+    </main>
+  </div>
+  <script>
+    feather.replace();
+  </script>
+  @RenderSection("Scripts", required: false)
+</body>
+</html>
