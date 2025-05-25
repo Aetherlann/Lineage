@@ -1,0 +1,375 @@
+@page
+@model MyDashboardApp.Pages.MockPages.LineageModel
+@{
+    ViewData["Title"] = "Data Lineage";
+    Layout = "Shared/_Layout";
+}
+
+@* Added Cytoscape.js and Dagre layout extension scripts *@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+<script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="text-2xl font-bold text-white mb-4">Data Lineage Tree</h1>
+            <div class="card bg-dark border-secondary mb-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-4">
+                            <label for="objectSelect" class="form-label text-white">Select Object:</label>
+                            <select id="objectSelect" class="form-select bg-dark text-white border-secondary" onchange="loadLineageData()">
+                                @foreach (var obj in Model.AllObjects)
+                                {
+                                    <option value="@obj" selected="@(obj == Model.SelectedObject)">@obj</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <form method="post" asp-page-handler="LoadData" class="d-inline">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-database"></i> Load Data from New.sqlite
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-3 justify-content-end">
+                                <div class="text-center">
+                                    <div class="text-info fs-4 fw-bold" id="upstreamCount">@(Model.LineageData?.TotalUpstreamCount ?? 0)</div>
+                                    <small class="text-muted">Upstream</small>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-warning fs-4 fw-bold" id="downstreamCount">@(Model.LineageData?.TotalDownstreamCount ?? 0)</div>
+                                    <small class="text-muted">Downstream</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-white">Lineage Tree</h5>
+                    <div id="graph-controls" class="btn-group btn-group-sm" role="group">
+                        <button id="zoom-in-btn" type="button" class="btn btn-outline-light" title="Zoom In">+</button>
+                        <button id="zoom-out-btn" type="button" class="btn btn-outline-light" title="Zoom Out">-</button>
+                        <button id="fit-btn" type="button" class="btn btn-outline-light" title="Fit to View">Fit</button>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-light" onclick="expandAll()">Expand All</button>
+                        <button type="button" class="btn btn-outline-light" onclick="collapseAll()">Collapse All</button>
+                        <button type="button" class="btn btn-outline-light" onclick="toggleImpactMode()" id="impactBtn">Impact Mode</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="breadcrumbNav" class="breadcrumb-nav mb-3" style="display: none;">
+                        <nav aria-label="breadcrumb"><ol class="breadcrumb mb-0" id="breadcrumbList"></ol></nav>
+                    </div>
+                    <div id="lineageTree" style="width: 100%; height: 550px; border: 1px solid #444;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-secondary"><h5 class="mb-0 text-white">Object Details</h5></div>
+                <div class="card-body"><div id="contextPanel"><p class="text-muted">Select an object from the tree to view details</p></div></div>
+            </div>
+            <div class="card bg-dark border-secondary mt-3">
+                <div class="card-header bg-secondary"><h5 class="mb-0 text-white">Search & Filter</h5></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <input type="text" id="searchInput" class="form-control bg-dark text-white border-secondary" placeholder="Search objects..." onkeyup="performTextSearch()"> @* Changed from filterTree to performTextSearch *@
+                    </div>
+                    <div id="filter-controls" class="mb-3">
+                        <label class="form-label text-white">Filter by Object Type:</label><br>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input filter-type-all" id="filterTypeAll" value="ALL" checked>
+                            <label class="form-check-label text-white" for="filterTypeAll">ALL</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input filter-type" id="filterTypeTable" value="TABLE" checked>
+                            <label class="form-check-label text-white" for="filterTypeTable">Table</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input filter-type" id="filterTypeView" value="VIEW" checked>
+                            <label class="form-check-label text-white" for="filterTypeView">View</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input filter-type" id="filterTypeProc" value="PROC" checked>
+                            <label class="form-check-label text-white" for="filterTypeProc">Proc</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input filter-type" id="filterTypeRoot" value="ROOT" checked>
+                            <label class="form-check-label text-white" for="filterTypeRoot">Root</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-white">Link Type:</label>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="filterLinkFk" value="FK" checked onchange="applyTypeFilters()">
+                            <label class="form-check-label text-white" for="filterLinkFk">FKs</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="filterLinkSql" value="SQL" checked onchange="applyTypeFilters()">
+                            <label class="form-check-label text-white" for="filterLinkSql">SQL</label>
+                        </div>
+                         <div class="form-check form-check-inline">
+                            <input type="checkbox" class="form-check-input" id="filterLinkAll" value="ALL_LINKS" checked>
+                            <label class="form-check-label text-white" for="filterLinkAll">All Links</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4"><div class="col-12"><div class="card bg-dark border-secondary"><div class="card-header bg-secondary"><h5 class="mb-0 text-white">Raw Foreign Key Dependencies (for Debugging)</h5></div><div class="card-body"><pre class="text-white">@System.Text.Json.JsonSerializer.Serialize(Model.RawFkDependencies, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })</pre></div></div></div></div>
+    <div class="row mt-4"><div class="col-12"><div class="card bg-dark border-secondary"><div class="card-header bg-secondary"><h5 class="mb-0 text-white">Raw SQL Dependencies (for Debugging)</h5></div><div class="card-body"><pre class="text-white">@System.Text.Json.JsonSerializer.Serialize(Model.RawSqlDependencies, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })</pre></div></div></div></div>
+</div>
+
+<style>
+    #lineageTree { background-color: #2B2B2B; }
+    .breadcrumb-nav { background-color: rgba(255, 255, 255, 0.1); padding: 8px 12px; border-radius: 4px; }
+    .breadcrumb { background: none; margin-bottom: 0; }
+    .breadcrumb-item a { color: #17a2b8; text-decoration: none; }
+    .breadcrumb-item a:hover { color: #fff; }
+    .breadcrumb-item.active { color: #ffc107; }
+    #graph-controls button { font-weight: bold; }
+    #filter-controls .form-check-inline { margin-right: 1rem; }
+</style>
+
+<script>
+    let currentLineageData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.LineageData ?? new MyDashboardApp.Models.LineageTreeData()));
+    let impactModeEnabled = false;
+    let expandedNodes = new Set(); 
+    let cy; 
+    let highlightedCenterNode = null; // Stores the node that was tapped to trigger current highlight
+
+    function transformDataForCytoscape(lineageData) {
+        const elements = []; const existingNodeIds = new Set();
+        function addNode(node, parentPath = null, direction = null) {
+            if (!node || !node.objectName) return;
+            const nodeId = node.path || node.objectName;
+            if (!existingNodeIds.has(nodeId)) {
+                elements.push({ data: { id: nodeId, name: node.objectName, type: node.objectType || 'UNKNOWN', depth: node.depth, linkType: node.linkType || '', raw: node }, classes: direction });
+                existingNodeIds.add(nodeId);
+            }
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(child => { addNode(child, nodeId, direction); const childId = child.path || child.objectName; elements.push({ data: { id: `edge_${nodeId}_${childId}`, source: nodeId, target: childId, label: child.linkType || 'child' } }); });
+            }
+        }
+        if (lineageData.root) addNode(lineageData.root, null, 'root');
+        const rootId = lineageData.root ? (lineageData.root.path || lineageData.root.objectName) : null;
+        if (lineageData.upstreamNodes && rootId) { lineageData.upstreamNodes.forEach(upNode => { addNode(upNode, null, 'upstream'); const upNodeId = upNode.path || upNode.objectName; elements.push({ data: { id: `edge_${upNodeId}_${rootId}`, source: upNodeId, target: rootId, label: upNode.linkType || 'upstream' } }); }); }
+        if (lineageData.downstreamNodes && rootId) { lineageData.downstreamNodes.forEach(downNode => { addNode(downNode, null, 'downstream'); const downNodeId = downNode.path || downNode.objectName; elements.push({ data: { id: `edge_${rootId}_${downNodeId}`, source: rootId, target: downNodeId, label: downNode.linkType || 'downstream' } }); }); }
+        return elements;
+    }
+
+    function applyCombinedFilters() {
+        if (!cy) return;
+
+        // Type filters
+        const checkedTypes = [];
+        document.querySelectorAll('.filter-type:checked').forEach(cb => { if (cb.value !== 'ROOT') checkedTypes.push(cb.value); });
+        const showRoot = document.getElementById('filterTypeRoot')?.checked;
+        
+        let nodeTypeSelector = "";
+        if (checkedTypes.length > 0 || showRoot) {
+            nodeTypeSelector = checkedTypes.map(type => `node[type='${type}']`).join(', ');
+            if (showRoot) {
+                if (nodeTypeSelector) nodeTypeSelector += ', ';
+                nodeTypeSelector += 'node.root';
+            }
+        } else { // If no type checkboxes are checked (and not Root), hide all nodes
+            cy.elements().hide();
+            if (highlightedCenterNode) { // Clear highlight if active center node is hidden
+                 cy.elements().removeClass('highlighted').removeClass('faded');
+                 highlightedCenterNode = null;
+            }
+            return;
+        }
+        
+        // Link type filters
+        const checkedLinkTypes = [];
+        if (document.getElementById('filterLinkFk')?.checked) checkedLinkTypes.push("FK");
+        if (document.getElementById('filterLinkSql')?.checked) checkedLinkTypes.push("SQL");
+        // Add others like 'child', 'upstream', 'downstream' if needed, or infer from context.
+        // For now, focusing on explicit FK/SQL labels on edges.
+        
+        let edgeSelector = "";
+        if (checkedLinkTypes.length > 0) {
+            edgeSelector = checkedLinkTypes.map(lt => `edge[label='${lt}']`).join(', ');
+        } else if (!document.getElementById('filterLinkAll')?.checked) { // If no specific link types and not "All Links"
+             cy.edges().hide(); // Hide all edges if no link types are selected
+        }
+
+
+        cy.batch(function() {
+            const allNodes = cy.nodes();
+            const nodesToShow = nodeTypeSelector ? allNodes.filter(nodeTypeSelector) : allNodes; // if no type selector, means show all types (but still subject to text search)
+            const nodesToHide = allNodes.not(nodesToShow);
+
+            nodesToShow.show();
+            nodesToHide.hide();
+
+            let finalEdgesToShow;
+            const allEdges = cy.edges();
+
+            if (edgeSelector) { // If specific link types are selected
+                finalEdgesToShow = allEdges.filter(edgeSelector);
+            } else if (document.getElementById('filterLinkAll')?.checked) { // If "All Links" is selected
+                finalEdgesToShow = allEdges;
+            } else { // No link types selected and not "All Links"
+                finalEdgesToShow = cy.collection(); // Empty collection
+            }
+
+            // Further filter edges based on visibility of their source and target nodes
+            finalEdgesToShow = finalEdgesToShow.filter(edge => edge.source().visible() && edge.target().visible());
+            const edgesToHide = allEdges.not(finalEdgesToShow);
+
+            finalEdgesToShow.show();
+            edgesToHide.hide();
+
+            // Text search filter (applied last to the currently visible set)
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            if (searchTerm) {
+                const textFilteredNodes = nodesToShow.filter(node => node.data('name').toLowerCase().includes(searchTerm));
+                nodesToShow.not(textFilteredNodes).hide(); // Hide nodes that were visible by type but not by text
+                
+                // Re-filter edges based on text-filtered nodes
+                const textFilteredEdges = finalEdgesToShow.filter(edge => edge.source().visible() && edge.target().visible());
+                finalEdgesToShow.not(textFilteredEdges).hide();
+            }
+
+
+            // Clear highlight if the central highlighted node is no longer visible
+            if (highlightedCenterNode && !highlightedCenterNode.visible()) {
+                cy.elements().removeClass('highlighted').removeClass('faded');
+                highlightedCenterNode = null;
+            }
+        });
+    }
+
+
+    async function initializeCytoscape() {
+        if (!currentLineageData || !currentLineageData.root) {
+            document.getElementById('lineageTree').innerHTML = '<p class="text-muted">No lineage data available for graph.</p>'; return;
+        }
+        const elements = transformDataForCytoscape(currentLineageData);
+        if (cy) cy.destroy();
+        cy = cytoscape({
+            container: document.getElementById('lineageTree'), elements: elements,
+            style: [
+                { selector: 'node', style: { 'label': 'data(name)', 'background-color': '#007bff', 'color': '#fff', 'text-valign': 'center', 'text-halign': 'center', 'font-size': '10px', 'width': 'label', 'height': 'label', 'padding': '10px', 'shape': 'round-rectangle', 'transition-property': 'opacity, background-color, border-color', 'transition-duration': '0.25s' } },
+                { selector: 'node[type="VIEW"]', style: { 'background-color': '#28a745' } }, { selector: 'node[type="PROC"]', style: { 'background-color': '#fd7e14' } }, { selector: 'node[type="TABLE"]', style: { 'background-color': '#007bff' } },
+                { selector: 'node.root', style: { 'background-color': '#ffc107', 'font-weight': 'bold' } }, 
+                { selector: 'node.upstream', style: { 'border-width': 0 } }, { selector: 'node.downstream', style: { 'border-width': 0 } },
+                { selector: 'edge', style: { 'width': 1.5, 'line-color': '#6c757d', 'target-arrow-color': '#6c757d', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'label': 'data(label)', 'font-size': '8px', 'color': '#adb5bd', 'text-rotation': 'autorotate', 'transition-property': 'opacity, line-color, target-arrow-color', 'transition-duration': '0.25s' } },
+                { selector: 'edge[label="FK"]', style: { 'line-style': 'dashed' } }, { selector: 'edge[label="SQL"]', style: { 'line-style': 'solid' } },
+                { selector: '.highlighted', style: { 'z-index': 10 } }, 
+                { selector: 'node.highlighted', style: { 'border-width': 3, 'border-color': '#FFD700' } }, 
+                { selector: 'edge.highlighted', style: { 'line-color': '#FF8C00', 'target-arrow-color': '#FF8C00', 'width': 2.5 } },
+                { selector: '.faded', style: { 'opacity': 0.25, 'text-opacity': 0.25 } }
+            ],
+            layout: { name: 'dagre', rankDir: 'LR', spacingFactor: 1.2, nodeSep: 60, edgeSep: 30, rankSep: 80 },
+            zoom: 1, minZoom: 0.1, maxZoom: 3.0, zoomingEnabled: true, userZoomingEnabled: true, panningEnabled: true, userPanningEnabled: true, boxSelectionEnabled: false
+        });
+        
+        cy.on('tap', 'node', function(evt){
+            var tappedNode = evt.target;
+            highlightedCenterNode = tappedNode; // Set the tapped node as the center of highlight
+            var neighborhood = tappedNode.neighborhood();
+            cy.elements().removeClass('highlighted').addClass('faded');
+            tappedNode.union(neighborhood).removeClass('faded').addClass('highlighted');
+            if(tappedNode.data('raw')) showObjectDetails(tappedNode.data('raw'));
+        });
+        cy.on('tap', function(evt){ if(evt.target === cy) { cy.elements().removeClass('highlighted').removeClass('faded'); highlightedCenterNode = null; } });
+        
+        applyCombinedFilters(); // Apply initial filters
+    }
+
+    async function loadLineageData() {
+        const selectedObject = document.getElementById('objectSelect').value;
+        if (!selectedObject) return;
+        try {
+            const response = await fetch(`?handler=LineageData&objectName=${encodeURIComponent(selectedObject)}`);
+            currentLineageData = await response.json();
+            await initializeCytoscape(); 
+            updateStats(); 
+            updateBreadcrumb([selectedObject]);
+        } catch (error) {
+            console.error('Error loading lineage data:', error);
+            document.getElementById('lineageTree').innerHTML = `<p class="text-danger">Error loading lineage data: ${error.message}</p>`;
+        }
+    }
+
+    function showObjectDetails(node) { /* ... (no changes to this function) ... */ 
+        const contextPanel = document.getElementById('contextPanel'); const metadata = node.metadata || {}; let metadataHtml = '';
+        Object.keys(metadata).forEach(key => { metadataHtml += `<p><strong>${key}:</strong> ${metadata[key]}</p>`; });
+        let sampleDataHtml = ''; if (metadata.sampleData) { sampleDataHtml = `<hr><h6 class="text-white">Sample Data</h6><div class="table-responsive"><table class="table table-sm table-dark"><tbody>${metadata.sampleData.split('\n').slice(0, 5).map(row =>`<tr>${row.split(',').map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`; }
+        contextPanel.innerHTML = `<h6 class="text-white">${node.objectName}</h6><p><strong>Type:</strong> <span class="badge bg-primary">${node.objectType}</span></p>${node.linkType ? `<p><strong>Link Type:</strong> <span class="badge bg-secondary">${node.linkType}</span></p>` : ''}<p><strong>Depth:</strong> ${node.depth} hops</p><p><strong>Path:</strong> <small class="text-muted">${node.path}</small></p>${metadataHtml} ${sampleDataHtml} <hr><div class="d-grid gap-2"><button class="btn btn-sm btn-outline-primary" onclick="selectObject('${node.objectName}')">Set as Root</button><button class="btn btn-sm btn-outline-info" onclick="showImpactAnalysis('${node.objectName}')">Impact Analysis</button></div>`;
+    }
+    function selectObject(objectName) { document.getElementById('objectSelect').value = objectName; loadLineageData(); }
+    function updateStats() { if (currentLineageData) { document.getElementById('upstreamCount').textContent = currentLineageData.totalUpstreamCount || 0; document.getElementById('downstreamCount').textContent = currentLineageData.totalDownstreamCount || 0; } }
+    
+    function performTextSearch() { applyCombinedFilters(); } // Text search now calls combined filters
+
+    // --- Placeholder/Needs Rework for Cytoscape ---
+    function toggleExpand(event, objectName) { console.log("toggleExpand called, needs rework"); }
+    function updateBreadcrumb(path) { console.log("updateBreadcrumb called, needs rework"); }
+    function expandAll() { console.log("expandAll called, needs rework for Cytoscape"); }
+    function collapseAll() { console.log("collapseAll called, needs rework for Cytoscape"); }
+    function toggleImpactMode() { console.log("toggleImpactMode called, needs rework"); }
+    // filterTree() is now performTextSearch() which calls applyCombinedFilters()
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('zoom-in-btn')?.addEventListener('click', () => { if (cy) cy.zoom(cy.zoom() * 1.2); });
+        document.getElementById('zoom-out-btn')?.addEventListener('click', () => { if (cy) cy.zoom(cy.zoom() * 0.8); });
+        document.getElementById('fit-btn')?.addEventListener('click', () => { if (cy) cy.fit(null, 50); });
+
+        // Type Filter Checkboxes
+        document.querySelectorAll('.filter-type, .filter-type-all').forEach(cb => {
+            cb.addEventListener('change', function() {
+                if (this.id === 'filterTypeAll') {
+                    const isChecked = this.checked;
+                    document.querySelectorAll('.filter-type').forEach(typeCb => { typeCb.checked = isChecked; });
+                } else {
+                    if (!this.checked) document.getElementById('filterTypeAll').checked = false;
+                    else { const allIndividualChecked = Array.from(document.querySelectorAll('.filter-type')).every(typeCb => typeCb.checked); if (allIndividualChecked) document.getElementById('filterTypeAll').checked = true; }
+                }
+                applyCombinedFilters(); // Changed from applyTypeFilters
+            });
+        });
+        
+        // Link Type Filter Checkboxes
+        document.querySelectorAll('#filterLinkFk, #filterLinkSql, #filterLinkAll').forEach(cb => {
+            cb.addEventListener('change', function() {
+                if (this.id === 'filterLinkAll') {
+                    const isChecked = this.checked;
+                    document.getElementById('filterLinkFk').checked = isChecked;
+                    document.getElementById('filterLinkSql').checked = isChecked;
+                } else if (this.id === 'filterLinkFk' || this.id === 'filterLinkSql') {
+                     if (!this.checked) document.getElementById('filterLinkAll').checked = false;
+                     else {
+                         if (document.getElementById('filterLinkFk').checked && document.getElementById('filterLinkSql').checked) {
+                             document.getElementById('filterLinkAll').checked = true;
+                         }
+                     }
+                }
+                applyCombinedFilters(); // Changed from applyTypeFilters
+            });
+        });
+
+
+        const objectSelect = document.getElementById('objectSelect');
+        if (objectSelect.value) { loadLineageData(); } 
+        else if (Model && Model.AllObjects && Model.AllObjects.length > 0) { objectSelect.value = Model.AllObjects[0]; loadLineageData(); } 
+        else { document.getElementById('lineageTree').innerHTML = '<p class="text-muted">No objects available to display lineage.</p>'; }
+    });
+</script>
