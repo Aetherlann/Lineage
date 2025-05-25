@@ -5,24 +5,29 @@ using MyDashboardApp.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
+
+// Existing AppDbContext registration
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite("Data Source=analysis.db")); // Ensure this matches your actual DB file
+    options.UseSqlite("Data Source=analysis.db"));
+
+// New NewDbLineageContext registration
+builder.Services.AddDbContext<NewDbLineageContext>(options =>
+    options.UseSqlite("Data Source=New.sqlite"));
+
 builder.Services.AddScoped<LineageService>();
 builder.Services.AddScoped<DataLoadingService>(); // Assuming this service exists for data loading operations
 var app = builder.Build();
 
-// Seed data
+// Seed data for AppDbContext (analysis.db)
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<AppDbContext>();
-        context.Database.Migrate(); // Apply any pending migrations
+        context.Database.Migrate(); // Apply any pending migrations for AppDbContext
 
-        bool dataAdded = false;
-
-        // Existing seeding for AnalysisConnections
+        // Seeding for AnalysisConnections (kept as per instructions, assuming it might serve other purposes)
         if (!context.AnalysisConnections.Any())
         {
             context.AnalysisConnections.AddRange(
@@ -32,40 +37,17 @@ using (var scope = app.Services.CreateScope())
                 new AnalysisConnection { Source = "SourceC", Destination = "DestA", CreatedAt = DateTime.UtcNow },
                 new AnalysisConnection { Source = "SourceB", Destination = "DestB", CreatedAt = DateTime.UtcNow }
             );
-            dataAdded = true;
+            context.SaveChanges(); // Save changes specifically for AnalysisConnections if they were added
         }
 
-        // Seeding for ForeignKeyDependencies
-        if (!context.ForeignKeyDependencies.Any())
-        {
-            context.ForeignKeyDependencies.AddRange(
-                new ForeignKeyDependency { ParentTable = "DimCustomer", ParentColumn = "CustomerID", ChildTable = "FactSales", ChildColumn = "CustomerID", CreatedAt = DateTime.UtcNow },
-                new ForeignKeyDependency { ParentTable = "DimProduct", ParentColumn = "ProductID", ChildTable = "FactSales", ChildColumn = "ProductID", CreatedAt = DateTime.UtcNow },
-                new ForeignKeyDependency { ParentTable = "DimDate", ParentColumn = "DateKey", ChildTable = "FactSales", ChildColumn = "OrderDateKey", CreatedAt = DateTime.UtcNow }
-            );
-            dataAdded = true;
-        }
+        // ForeignKeyDependencies and SqlDependencies seeding REMOVED from AppDbContext seeding logic.
+        // These are now assumed to come from New.sqlite via NewDbLineageContext.
 
-        // Seeding for SqlDependencies
-        if (!context.SqlDependencies.Any())
-        {
-            context.SqlDependencies.AddRange(
-                new SqlDependency { SourceObject = "RawOrders", TargetObject = "ViewRecentOrders", ObjectType = "VIEW", SqlTextSnippet = "SELECT OrderID, CustomerID, OrderDate, TotalAmount FROM RawOrders WHERE OrderDate > '2023-01-01'", CreatedAt = DateTime.UtcNow },
-                new SqlDependency { SourceObject = "ViewRecentOrders", TargetObject = "ProcGenerateSalesReport", ObjectType = "PROC", SqlTextSnippet = "INSERT INTO SalesReport (ReportDate, TotalSales) SELECT GETDATE(), SUM(TotalAmount) FROM ViewRecentOrders", CreatedAt = DateTime.UtcNow },
-                new SqlDependency { SourceObject = "FactSales", TargetObject = "ViewSalesSummary", ObjectType = "VIEW", SqlTextSnippet = "SELECT ProductID, SUM(SalesAmount) AS TotalSales FROM FactSales GROUP BY ProductID", CreatedAt = DateTime.UtcNow }
-            );
-            dataAdded = true;
-        }
-
-        if (dataAdded)
-        {
-            context.SaveChanges();
-        }
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred seeding the DB.");
+        logger.LogError(ex, "An error occurred seeding the AppDbContext (analysis.db).");
     }
 }
 
